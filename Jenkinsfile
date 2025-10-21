@@ -1,110 +1,110 @@
 pipeline {
-    agent none
+    agent any
+    
+    environment {
+        APP_ENV = 'testing'
+        APP_KEY = 'base64:test-key-for-jenkins'
+        DB_CONNECTION = 'sqlite'
+        DB_DATABASE = ':memory:'
+    }
     
     stages {
         stage('Clone') {
-            agent any
             steps {
                 timeout(time: 2, unit: 'MINUTES'){
                     git branch: 'main', 
                         credentialsId: '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', 
                         url: 'https://github.com/nilver987/PDS-2025-2-test-sonar-test.git'
                 }
-                stash includes: '**', name: 'source'
             }
         }
         
-        stage('Build & Test') {
-            agent {
-                docker {
-                    image 'php:8.2-cli'
-                    args '-u root:root'
-                    reuseNode true
+        stage('Build') {
+            steps {
+                timeout(time: 8, unit: 'MINUTES'){
+                    dir('backend-laravel') {
+                        sh '''
+                            docker run --rm \
+                                -v "$(pwd)":/app \
+                                -w /app \
+                                composer:latest \
+                                composer install --no-interaction --prefer-dist --optimize-autoloader
+                        '''
+                    }
                 }
             }
-            stages {
-                stage('Install System Dependencies') {
-                    steps {
-                        timeout(time: 5, unit: 'MINUTES'){
-                            sh '''
-                                apt-get update -qq
-                                apt-get install -y -qq git unzip libzip-dev zip sqlite3
-                                docker-php-ext-install zip pdo_sqlite
-                            '''
-                        }
-                    }
-                }
-                
-                stage('Install Composer') {
-                    steps {
-                        timeout(time: 3, unit: 'MINUTES'){
-                            sh '''
-                                curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-                                composer --version
-                            '''
-                        }
-                    }
-                }
-                
-                stage('Install Dependencies') {
-                    steps {
-                        timeout(time: 8, unit: 'MINUTES'){
-                            dir('backend-laravel') {
-                                sh '''
-                                    composer install --no-interaction --prefer-dist --optimize-autoloader
+        }
+        
+        stage('Prepare Environment') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES'){
+                    dir('backend-laravel') {
+                        sh '''
+                            docker run --rm \
+                                -v "$(pwd)":/app \
+                                -w /app \
+                                php:8.2-cli \
+                                bash -c "
+                                    mkdir -p storage/framework/cache/data
+                                    mkdir -p storage/framework/sessions
+                                    mkdir -p storage/framework/views
+                                    mkdir -p storage/framework/testing
+                                    mkdir -p storage/logs
+                                    mkdir -p bootstrap/cache
+                                    mkdir -p database
+                                    
+                                    chmod -R 777 storage
+                                    chmod -R 777 bootstrap/cache
+                                    
+                                    touch database/database.sqlite
                                     
                                     if [ ! -f .env ]; then
-                                        cp .env.example .env || echo "APP_ENV=testing" > .env
+                                        cp .env.example .env 2>/dev/null || echo 'APP_ENV=testing' > .env
                                     fi
                                     
                                     php artisan key:generate --force
-                                '''
-                            }
-                        }
+                                "
+                        '''
                     }
                 }
-                
-                stage('Prepare Environment') {
-                    steps {
-                        timeout(time: 2, unit: 'MINUTES'){
-                            dir('backend-laravel') {
-                                sh '''
-                                    mkdir -p storage/framework/{cache/data,sessions,views,testing}
-                                    mkdir -p storage/logs bootstrap/cache database
-                                    chmod -R 777 storage bootstrap/cache
-                                    touch database/database.sqlite
-                                '''
-                            }
-                        }
-                    }
-                }
-                
-                stage('Run Tests') {
-                    steps {
-                        timeout(time: 10, unit: 'MINUTES'){
-                            dir('backend-laravel') {
-                                sh '''
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES'){
+                    dir('backend-laravel') {
+                        sh '''
+                            docker run --rm \
+                                -v "$(pwd)":/app \
+                                -w /app \
+                                php:8.2-cli \
+                                bash -c "
+                                    apt-get update -qq
+                                    apt-get install -y -qq libzip-dev zip sqlite3 git unzip
+                                    docker-php-ext-install zip pdo_sqlite
+                                    
                                     php artisan config:clear
                                     php artisan cache:clear
                                     
                                     php artisan test --coverage-clover=coverage.xml --log-junit=test-results.xml || true
                                     
                                     if [ -f coverage.xml ]; then
-                                        echo "✅ Coverage report generated"
+                                        echo '✅ Coverage report generated'
+                                        ls -lh coverage.xml
+                                    else
+                                        echo '⚠️ Coverage report not found'
                                     fi
-                                '''
-                            }
-                        }
+                                "
+                        '''
                     }
                 }
             }
         }
         
-        stage('SonarQube Analysis') {
-            agent any
+        stage('Sonar') {
             steps {
                 timeout(time: 4, unit: 'MINUTES'){
-                    unstash 'source'
                     dir('backend-laravel') {
                         script {
                             def scannerHome = tool 'SonarScanner'
@@ -119,7 +119,7 @@ pipeline {
                                     -Dsonar.sourceEncoding=UTF-8 \
                                     -Dsonar.php.coverage.reportPaths=coverage.xml \
                                     -Dsonar.php.tests.reportPath=test-results.xml \
-                                    -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,resources/**,config/**,database/migrations/**
+                                    -Dsonar.exclusions=vendor/**,storage/**,bootstrap/**,public/**,resources/**,config/**,database/migrations/**
                                 """
                             }
                         }
@@ -129,7 +129,6 @@ pipeline {
         }
         
         stage('Quality Gate') {
-            agent any
             steps {
                 timeout(time: 5, unit: 'MINUTES'){
                     sleep(10)
@@ -139,13 +138,12 @@ pipeline {
         }
         
         stage('Deploy') {
-            agent any
             steps {
                 timeout(time: 8, unit: 'MINUTES'){
                     dir('backend-laravel') {
                         sh '''
-                            echo "Deployment stage - ready for production deployment"
-                            echo "Application optimized and tested successfully"
+                            echo "🚀 Deployment stage"
+                            echo "✅ Application ready for production"
                         '''
                     }
                 }
@@ -158,7 +156,7 @@ pipeline {
             echo '✅ Pipeline completed successfully'
         }
         failure {
-            echo '❌ Pipeline failed'
+            echo '❌ Pipeline failed - check logs'
         }
     }
 }
