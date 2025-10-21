@@ -1,11 +1,6 @@
 pipeline {
     agent any
-    
-    tools {
-        // Configurar PHP si está disponible como herramienta en Jenkins
-        // O asegurarse de que PHP y Composer estén en el PATH del agente
-    }
-    
+
     environment {
         // Variables de entorno para Laravel
         APP_ENV = 'testing'
@@ -13,21 +8,21 @@ pipeline {
         DB_CONNECTION = 'sqlite'
         DB_DATABASE = ':memory:'
     }
-    
+
     stages {
         stage('Clone') {
             steps {
-                timeout(time: 2, unit: 'MINUTES'){
+                timeout(time: 2, unit: 'MINUTES') {
                     git branch: 'main', 
                         credentialsId: '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', 
                         url: 'https://github.com/nilver987/PDS-2025-2-test-sonar-test.git'
                 }
             }
         }
-        
+
         stage('Install Dependencies') {
             steps {
-                timeout(time: 8, unit: 'MINUTES'){
+                timeout(time: 8, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         // Instalar dependencias de Composer
                         sh 'composer install --no-interaction --prefer-dist --optimize-autoloader'
@@ -41,10 +36,10 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Prepare Environment') {
             steps {
-                timeout(time: 2, unit: 'MINUTES'){
+                timeout(time: 2, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         // Crear directorios necesarios
                         sh 'mkdir -p storage/framework/cache'
@@ -59,10 +54,10 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Test') {
             steps {
-                timeout(time: 10, unit: 'MINUTES'){
+                timeout(time: 10, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         // Ejecutar tests con PHPUnit y generar reporte de cobertura
                         sh 'php artisan test --coverage --coverage-clover=coverage.xml'
@@ -73,10 +68,10 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Code Quality - PHPStan') {
             steps {
-                timeout(time: 5, unit: 'MINUTES'){
+                timeout(time: 5, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         // Análisis estático de código con PHPStan (opcional)
                         sh './vendor/bin/phpstan analyse --error-format=json > phpstan-report.json || true'
@@ -84,12 +79,12 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Sonar') {
             steps {
-                timeout(time: 4, unit: 'MINUTES'){
+                timeout(time: 4, unit: 'MINUTES') {
                     dir('backend-laravel') {
-                        withSonarQubeEnv('sonarqube'){
+                        withSonarQubeEnv('sonarqube') {
                             // Scanner de SonarQube para PHP/Laravel
                             sh '''
                                 sonar-scanner \
@@ -105,19 +100,19 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Quality Gate') {
             steps {
                 sleep(10) // segundos
-                timeout(time: 4, unit: 'MINUTES'){
+                timeout(time: 4, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
-        
+
         stage('Deploy') {
             steps {
-                timeout(time: 8, unit: 'MINUTES'){
+                timeout(time: 8, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         echo "Iniciando despliegue de Laravel..."
                         
@@ -130,21 +125,15 @@ pipeline {
                         // sh 'php artisan migrate --force'
                         
                         // Iniciar servidor de desarrollo (para testing)
-                        // En producción, esto se reemplazaría con deployment real
                         echo "php artisan serve --host=0.0.0.0 --port=8000"
-                        
-                        // Para producción, podrías usar algo como:
-                        // sh 'rsync -avz --exclude="vendor" --exclude="node_modules" . user@production-server:/var/www/html/'
-                        // sh 'ssh user@production-server "cd /var/www/html && composer install --no-dev && php artisan migrate --force"'
                     }
                 }
             }
         }
     }
-    
+
     post {
         always {
-            // Limpiar archivos temporales
             dir('backend-laravel') {
                 sh 'php artisan cache:clear || true'
                 sh 'php artisan config:clear || true'
@@ -153,10 +142,10 @@ pipeline {
             }
         }
         success {
-            echo 'Pipeline ejecutado exitosamente!'
+            echo '✅ Pipeline ejecutado exitosamente!'
         }
         failure {
-            echo 'Pipeline falló. Revisa los logs.'
+            echo '❌ Pipeline falló. Revisa los logs.'
         }
     }
 }
