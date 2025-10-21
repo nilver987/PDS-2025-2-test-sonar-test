@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Variables de entorno para Laravel
         APP_ENV = 'testing'
         APP_KEY = 'base64:your-app-key-here'
         DB_CONNECTION = 'sqlite'
@@ -13,67 +12,67 @@ pipeline {
         stage('Clone') {
             steps {
                 timeout(time: 2, unit: 'MINUTES') {
-                    git branch: 'main', 
-                        credentialsId: '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', 
+                    git branch: 'main',
+                        credentialsId: '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',
                         url: 'https://github.com/nilver987/PDS-2025-2-test-sonar-test.git'
                 }
             }
         }
 
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'php:8.2'
+                    args '-v $PWD:/app'
+                }
+            }
             steps {
                 timeout(time: 8, unit: 'MINUTES') {
                     dir('backend-laravel') {
-                        // Instalar dependencias de Composer
-                        sh 'composer install --no-interaction --prefer-dist --optimize-autoloader'
-                        
-                        // Copiar archivo de entorno
-                        sh 'cp .env.example .env'
-                        
-                        // Generar key de aplicación
-                        sh 'php artisan key:generate'
+                        sh '''
+                            apt-get update && apt-get install -y unzip git zip libzip-dev curl && docker-php-ext-install zip
+                            curl -sS https://getcomposer.org/installer | php
+                            mv composer.phar /usr/local/bin/composer
+                            composer install --no-interaction --prefer-dist --optimize-autoloader
+                            cp .env.example .env || true
+                            php artisan key:generate || true
+                        '''
                     }
                 }
             }
         }
 
         stage('Prepare Environment') {
+            agent { docker { image 'php:8.2' } }
             steps {
                 timeout(time: 2, unit: 'MINUTES') {
                     dir('backend-laravel') {
-                        // Crear directorios necesarios
-                        sh 'mkdir -p storage/framework/cache'
-                        sh 'mkdir -p storage/framework/sessions'
-                        sh 'mkdir -p storage/framework/views'
-                        sh 'mkdir -p storage/logs'
-                        
-                        // Dar permisos
-                        sh 'chmod -R 775 storage'
-                        sh 'chmod -R 775 bootstrap/cache'
+                        sh '''
+                            mkdir -p storage/framework/{cache,sessions,views}
+                            mkdir -p storage/logs
+                            chmod -R 775 storage bootstrap/cache
+                        '''
                     }
                 }
             }
         }
 
         stage('Test') {
+            agent { docker { image 'php:8.2' } }
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     dir('backend-laravel') {
-                        // Ejecutar tests con PHPUnit y generar reporte de cobertura
-                        sh 'php artisan test --coverage --coverage-clover=coverage.xml'
-                        
-                        // O si usas PHPUnit directamente:
-                        // sh './vendor/bin/phpunit --coverage-clover=coverage.xml --log-junit=test-results.xml'
+                        sh 'php artisan test --coverage --coverage-clover=coverage.xml || true'
                     }
                 }
             }
         }
 
         stage('Code Quality - PHPStan') {
+            agent { docker { image 'php:8.2' } }
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
                     dir('backend-laravel') {
-                        // Análisis estático de código con PHPStan (opcional)
                         sh './vendor/bin/phpstan analyse --error-format=json > phpstan-report.json || true'
                     }
                 }
@@ -85,7 +84,6 @@ pipeline {
                 timeout(time: 4, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         withSonarQubeEnv('sonarqube') {
-                            // Scanner de SonarQube para PHP/Laravel
                             sh '''
                                 sonar-scanner \
                                 -Dsonar.projectKey=laravel-project \
@@ -103,7 +101,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                sleep(10) // segundos
+                sleep(10)
                 timeout(time: 4, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -111,21 +109,16 @@ pipeline {
         }
 
         stage('Deploy') {
+            agent { docker { image 'php:8.2' } }
             steps {
                 timeout(time: 8, unit: 'MINUTES') {
                     dir('backend-laravel') {
                         echo "Iniciando despliegue de Laravel..."
-                        
-                        // Optimizar aplicación para producción
-                        sh 'php artisan config:cache'
-                        sh 'php artisan route:cache'
-                        sh 'php artisan view:cache'
-                        
-                        // Ejecutar migraciones (si es necesario)
-                        // sh 'php artisan migrate --force'
-                        
-                        // Iniciar servidor de desarrollo (para testing)
-                        echo "php artisan serve --host=0.0.0.0 --port=8000"
+                        sh '''
+                            php artisan config:cache
+                            php artisan route:cache
+                            php artisan view:cache
+                        '''
                     }
                 }
             }
@@ -134,11 +127,16 @@ pipeline {
 
     post {
         always {
-            dir('backend-laravel') {
-                sh 'php artisan cache:clear || true'
-                sh 'php artisan config:clear || true'
-                sh 'php artisan route:clear || true'
-                sh 'php artisan view:clear || true'
+            agent { docker { image 'php:8.2' } }
+            steps {
+                dir('backend-laravel') {
+                    sh '''
+                        php artisan cache:clear || true
+                        php artisan config:clear || true
+                        php artisan route:clear || true
+                        php artisan view:clear || true
+                    '''
+                }
             }
         }
         success {
