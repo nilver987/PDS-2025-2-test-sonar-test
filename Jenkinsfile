@@ -37,49 +37,68 @@ pipeline {
         
         stage('Prepare Environment') {
             steps {
-                timeout(time: 2, unit: 'MINUTES'){
+                timeout(time: 3, unit: 'MINUTES'){
                     dir('backend-laravel') {
-                        sh '''
-                            docker run --rm \
-                                -v "$(pwd)":/app \
-                                -w /app \
-                                php:8.2-cli \
-                                bash -c '
-                                    set -e
-                                    echo "Creating directories..."
-                                    mkdir -p storage/framework/cache/data
-                                    mkdir -p storage/framework/sessions
-                                    mkdir -p storage/framework/views
-                                    mkdir -p storage/framework/testing
-                                    mkdir -p storage/logs
-                                    mkdir -p bootstrap/cache
-                                    mkdir -p database
-                                    
-                                    echo "Setting permissions..."
-                                    chmod -R 777 storage || true
-                                    chmod -R 777 bootstrap/cache || true
-                                    
-                                    echo "Creating SQLite database..."
-                                    touch database/database.sqlite
-                                    
-                                    echo "Configuring .env file..."
-                                    if [ ! -f .env ]; then
-                                        if [ -f .env.example ]; then
-                                            cp .env.example .env
-                                        else
-                                            echo "APP_ENV=testing" > .env
-                                            echo "APP_KEY=" >> .env
-                                            echo "DB_CONNECTION=sqlite" >> .env
-                                            echo "DB_DATABASE=/app/database/database.sqlite" >> .env
-                                        fi
+                        script {
+                            // Crear directorios y archivos en el host
+                            sh '''
+                                echo "📁 Creating directories..."
+                                mkdir -p storage/framework/cache/data
+                                mkdir -p storage/framework/sessions
+                                mkdir -p storage/framework/views
+                                mkdir -p storage/framework/testing
+                                mkdir -p storage/logs
+                                mkdir -p bootstrap/cache
+                                mkdir -p database
+                                
+                                echo "🔒 Setting permissions..."
+                                chmod -R 777 storage || true
+                                chmod -R 777 bootstrap/cache || true
+                                
+                                echo "💾 Creating SQLite database..."
+                                touch database/database.sqlite
+                                chmod 666 database/database.sqlite || true
+                                
+                                echo "📝 Configuring .env file..."
+                                if [ ! -f .env ]; then
+                                    if [ -f .env.example ]; then
+                                        cp .env.example .env
+                                        echo "✅ Copied .env.example to .env"
+                                    else
+                                        cat > .env << 'EOF'
+APP_NAME=Laravel
+APP_ENV=testing
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost
+
+DB_CONNECTION=sqlite
+DB_DATABASE=/app/database/database.sqlite
+
+CACHE_DRIVER=array
+QUEUE_CONNECTION=sync
+SESSION_DRIVER=array
+EOF
+                                        echo "✅ Created default .env"
                                     fi
-                                    
-                                    echo "Generating application key..."
-                                    php artisan key:generate --force --no-interaction
-                                    
-                                    echo "✅ Environment prepared successfully"
-                                '
-                        '''
+                                fi
+                                
+                                echo "📄 .env file status:"
+                                ls -lah .env
+                            '''
+                            
+                            // Generar APP_KEY usando Docker
+                            sh '''
+                                echo "🔑 Generating application key..."
+                                docker run --rm \
+                                    -v "$(pwd)":/app \
+                                    -w /app \
+                                    php:8.2-cli \
+                                    php artisan key:generate --force --no-interaction --ansi
+                                
+                                echo "✅ Environment prepared successfully"
+                            '''
+                        }
                     }
                 }
             }
