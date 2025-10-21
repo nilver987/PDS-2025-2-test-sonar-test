@@ -44,7 +44,9 @@ pipeline {
                                 -v "$(pwd)":/app \
                                 -w /app \
                                 php:8.2-cli \
-                                bash -c "
+                                bash -c '
+                                    set -e
+                                    echo "Creating directories..."
                                     mkdir -p storage/framework/cache/data
                                     mkdir -p storage/framework/sessions
                                     mkdir -p storage/framework/views
@@ -53,17 +55,30 @@ pipeline {
                                     mkdir -p bootstrap/cache
                                     mkdir -p database
                                     
-                                    chmod -R 777 storage
-                                    chmod -R 777 bootstrap/cache
+                                    echo "Setting permissions..."
+                                    chmod -R 777 storage || true
+                                    chmod -R 777 bootstrap/cache || true
                                     
+                                    echo "Creating SQLite database..."
                                     touch database/database.sqlite
                                     
+                                    echo "Configuring .env file..."
                                     if [ ! -f .env ]; then
-                                        cp .env.example .env 2>/dev/null || echo 'APP_ENV=testing' > .env
+                                        if [ -f .env.example ]; then
+                                            cp .env.example .env
+                                        else
+                                            echo "APP_ENV=testing" > .env
+                                            echo "APP_KEY=" >> .env
+                                            echo "DB_CONNECTION=sqlite" >> .env
+                                            echo "DB_DATABASE=/app/database/database.sqlite" >> .env
+                                        fi
                                     fi
                                     
-                                    php artisan key:generate --force
-                                "
+                                    echo "Generating application key..."
+                                    php artisan key:generate --force --no-interaction
+                                    
+                                    echo "✅ Environment prepared successfully"
+                                '
                         '''
                     }
                 }
