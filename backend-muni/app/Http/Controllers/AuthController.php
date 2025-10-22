@@ -34,7 +34,7 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
-            
+
             // Verificar si el usuario está activo
             if (isset($user->estado) && $user->estado !== 'activo') {
                 Auth::logout();
@@ -50,7 +50,7 @@ class AuthController extends Controller
             // Cargar relaciones de forma segura
             try {
                 $user->load(['gerencia', 'roles', 'permissions']);
-                
+
                 // Obtener permisos del usuario de forma segura
                 $permissions = [];
                 if (method_exists($user, 'getAllPermissions')) {
@@ -151,7 +151,7 @@ class AuthController extends Controller
     {
         try {
             $user = $request->user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -249,7 +249,7 @@ class AuthController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Error al registrar usuario'
