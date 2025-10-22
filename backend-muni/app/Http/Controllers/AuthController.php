@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\PersonalAccessToken; // añadido
 
 class AuthController extends Controller
 {
@@ -102,24 +103,45 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+        // Intentar revocar token sin lanzar excepciones hacia afuera.
+        $bearer = $request->bearerToken();
+
+        // Intentar por el usuario (si está autenticado)
         try {
-            // Revocar token actual
-            if ($request->user()) {
-                $request->user()->currentAccessToken()->delete();
+            $user = $request->user() ?? Auth::user();
+            if ($user && method_exists($user, 'currentAccessToken')) {
+                $token = $user->currentAccessToken();
+                if ($token) {
+                    $token->delete();
+                }
             }
-
-            Auth::logout();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Logout exitoso'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error en logout'
-            ], 500);
+        } catch (\Throwable $e) {
+            // Ignorar errores al intentar eliminar token vía usuario
         }
+
+        // Intentar eliminar el token directamente desde el bearer token (si existe)
+        if ($bearer) {
+            try {
+                $pat = PersonalAccessToken::findToken($bearer);
+                if ($pat) {
+                    $pat->delete();
+                }
+            } catch (\Throwable $e) {
+                // Ignorar errores al intentar eliminar token vía bearer
+            }
+        }
+
+        // Intentar cerrar sesión en el guard, sin que falle si algo sale mal
+        try {
+            Auth::logout();
+        } catch (\Throwable $e) {
+            // Ignorar
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logout exitoso'
+        ]);
     }
 
     /**
@@ -253,7 +275,14 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user = $request->user();
+        // Usar request user o Auth fallback
+        $user = $request->user() ?? Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no autenticado'
+            ], 401);
+        }
 
         // Verificar contraseña actual
         if (!Hash::check($request->current_password, $user->password)) {
@@ -306,8 +335,8 @@ class AuthController extends Controller
     public function refresh(Request $request)
     {
         try {
-            $user = $request->user();
-            
+            $user = $request->user() ?? Auth::user();
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -315,8 +344,29 @@ class AuthController extends Controller
                 ], 401);
             }
 
-            // Revocar token actual
-            $request->user()->currentAccessToken()->delete();
+            // Revocar token actual de forma segura (por usuario o por bearer)
+            try {
+                if (method_exists($user, 'currentAccessToken')) {
+                    $token = $user->currentAccessToken();
+                    if ($token) {
+                        $token->delete();
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignorar problemas con tokens
+            }
+
+            $bearer = $request->bearerToken();
+            if ($bearer) {
+                try {
+                    $pat = PersonalAccessToken::findToken($bearer);
+                    if ($pat) {
+                        $pat->delete();
+                    }
+                } catch (\Throwable $e) {
+                    // Ignorar
+                }
+            }
 
             // Generar nuevo token
             $token = $user->createToken('auth-token')->plainTextToken;

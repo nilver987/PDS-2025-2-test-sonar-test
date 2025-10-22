@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use App\Models\Expediente; // added for safe checks
 
 class AdminGerenciaController extends Controller
 {
@@ -35,6 +36,19 @@ class AdminGerenciaController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Construir regla segura para flujos_permitidos.* si el método existe
+        $tiposTramiteKeys = [];
+        if (class_exists(Expediente::class) && method_exists(Expediente::class, 'getTiposTramite')) {
+            $tipos = Expediente::getTiposTramite();
+            if (is_array($tipos)) {
+                $tiposTramiteKeys = array_keys($tipos);
+            }
+        }
+
+        $flujosRule = $tiposTramiteKeys
+            ? 'string|in:' . implode(',', $tiposTramiteKeys)
+            : 'string';
+
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:255|unique:gerencias,nombre',
             'codigo' => 'required|string|max:10|unique:gerencias,codigo',
@@ -42,7 +56,7 @@ class AdminGerenciaController extends Controller
             'tipo' => 'required|string|in:' . implode(',', array_keys(Gerencia::getTipos())),
             'gerencia_padre_id' => 'nullable|exists:gerencias,id',
             'flujos_permitidos' => 'nullable|array',
-            'flujos_permitidos.*' => 'string|in:' . implode(',', array_keys(\App\Models\Expediente::getTiposTramite())),
+            'flujos_permitidos.*' => $flujosRule,
             'orden' => 'nullable|integer|min:0',
         ]);
 
@@ -121,14 +135,27 @@ class AdminGerenciaController extends Controller
      */
     public function update(Request $request, Gerencia $gerencia): JsonResponse
     {
+        // Construir regla segura para flujos_permitidos.* si el método existe
+        $tiposTramiteKeys = [];
+        if (class_exists(Expediente::class) && method_exists(Expediente::class, 'getTiposTramite')) {
+            $tipos = Expediente::getTiposTramite();
+            if (is_array($tipos)) {
+                $tiposTramiteKeys = array_keys($tipos);
+            }
+        }
+
+        $flujosRule = $tiposTramiteKeys
+            ? 'string|in:' . implode(',', $tiposTramiteKeys)
+            : 'string';
+
         $validator = Validator::make($request->all(), [
-            'nombre' => 'sometimes|string|max:255|unique:gerencias,nombre,' . $gerencia->id,
-            'codigo' => 'sometimes|string|max:10|unique:gerencias,codigo,' . $gerencia->id,
+            'nombre' => 'sometimes|required|string|max:255|unique:gerencias,nombre,' . $gerencia->id,
+            'codigo' => 'sometimes|required|string|max:10|unique:gerencias,codigo,' . $gerencia->id,
             'descripcion' => 'nullable|string',
             'tipo' => 'sometimes|string|in:' . implode(',', array_keys(Gerencia::getTipos())),
             'gerencia_padre_id' => 'nullable|exists:gerencias,id',
             'flujos_permitidos' => 'nullable|array',
-            'flujos_permitidos.*' => 'string|in:' . implode(',', array_keys(\App\Models\Expediente::getTiposTramite())),
+            'flujos_permitidos.*' => $flujosRule,
             'orden' => 'nullable|integer|min:0',
             'activo' => 'sometimes|boolean',
         ]);
@@ -144,7 +171,7 @@ class AdminGerenciaController extends Controller
             DB::beginTransaction();
 
             $gerencia->update($request->only([
-                'nombre', 'codigo', 'descripcion', 'tipo', 
+                'nombre', 'codigo', 'descripcion', 'tipo',
                 'gerencia_padre_id', 'flujos_permitidos', 'orden', 'activo'
             ]));
 
@@ -219,7 +246,7 @@ class AdminGerenciaController extends Controller
         }
 
         $user = User::find($request->user_id);
-        
+
         // Verificar que el usuario no esté ya asignado a otra gerencia
         if ($user->gerencia_id && $user->gerencia_id !== $gerencia->id) {
             return response()->json([
@@ -254,7 +281,7 @@ class AdminGerenciaController extends Controller
         }
 
         $user = User::find($request->user_id);
-        
+
         if ($user->gerencia_id !== $gerencia->id) {
             return response()->json([
                 'success' => false,
@@ -292,8 +319,9 @@ class AdminGerenciaController extends Controller
     public function estadisticas(): JsonResponse
     {
         $estadisticas = [
-            'total_gerencias' => Gerencia::gerencias()->activas()->count(),
-            'total_subgerencias' => Gerencia::subgerencias()->activas()->count(),
+            // contar gerencias por tipo en lugar de invocar métodos no estáticos
+            'total_gerencias' => Gerencia::where('tipo', Gerencia::TIPO_GERENCIA)->activas()->count(),
+            'total_subgerencias' => Gerencia::where('tipo', Gerencia::TIPO_SUBGERENCIA)->activas()->count(),
             'gerencias_con_usuarios' => Gerencia::has('users')->activas()->count(),
             'gerencias_con_expedientes' => Gerencia::has('expedientes')->activas()->count(),
         ];
@@ -434,7 +462,7 @@ class AdminGerenciaController extends Controller
 
         try {
             $updateData = $request->only(['name', 'email', 'gerencia_id', 'activo']);
-            
+
             if ($request->has('password')) {
                 $updateData['password'] = Hash::make($request->password);
             }

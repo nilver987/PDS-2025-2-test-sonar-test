@@ -1,8 +1,12 @@
-@extends('layouts.app')
+<!doctype html>
+<html>
+<head>
+    <title>Mis Trámites</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+</head>
+<body class="bg-gray-50">
 
-@section('title', 'Mis Trámites')
-
-@section('content')
 <div class="min-h-screen bg-gray-50">
     <!-- Header -->
     <header class="bg-white shadow">
@@ -232,4 +236,5 @@
         overflow: hidden;
     }
 </style>
-@endsection
+</body>
+</html>

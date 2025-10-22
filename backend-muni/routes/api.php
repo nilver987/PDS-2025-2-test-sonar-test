@@ -207,3 +207,26 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{user}', [AdminGerenciaController::class, 'deleteUsuario']);
     });
 });
+
+// Rutas de autenticación
+Route::prefix('auth')->group(function () {
+	// públicas
+	Route::post('login', [AuthController::class, 'login']);
+	Route::post('register', [AuthController::class, 'register']);
+	Route::post('check-email', [AuthController::class, 'checkEmail']);
+
+	// protegidas por sanctum
+	Route::middleware('auth:sanctum')->group(function () {
+		Route::post('logout', [AuthController::class, 'logout']);
+		Route::get('user', [AuthController::class, 'user']);
+		Route::post('refresh', [AuthController::class, 'refresh']);
+		Route::post('change-password', [AuthController::class, 'changePassword']);
+	});
+});
+
+// Rutas para gerencias (API resource)
+Route::middleware('auth:sanctum')->group(function () {
+	Route::apiResource('gerencias', AdminGerenciaController::class);
+	// si se necesitan rutas adicionales (asignarUsuario, removerUsuario, etc.)
+	// se pueden agregar aquí con prefijo 'gerencias/{gerencia}/...'
+});

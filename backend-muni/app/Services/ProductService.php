@@ -15,17 +15,4 @@ class ProductService
     {
         return $this->productRepo->find($id);
     }
-
-    public function createProduct($name, $price)
-    {
-        return $this->productRepo->create([
-            'name' => $name,
-            'price' => $price
-        ]);
-    }
-
-    public function updateStock($productId, $quantity)
-    {
-        return $this->productRepo->updateStock($productId, $quantity);
-    }
 }

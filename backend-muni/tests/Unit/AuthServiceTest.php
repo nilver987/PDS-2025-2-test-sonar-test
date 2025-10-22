@@ -23,7 +23,7 @@ class AuthServiceTest extends TestCase
 
         $authService = new AuthService($authRepo);
         $result = $authService->login('user@test.com', 'password123');
-
+        
         $this->assertTrue($result);
     }
 }

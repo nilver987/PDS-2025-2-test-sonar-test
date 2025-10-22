@@ -17,7 +17,7 @@ class ValidationServiceTest extends TestCase
     {
         $validator = new ValidationService();
         $result = $validator->validateEmail('test@example.com');
-
+        
         $this->assertTrue($result);
     }
 }

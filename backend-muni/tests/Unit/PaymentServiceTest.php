@@ -23,7 +23,7 @@ class PaymentServiceTest extends TestCase
 
         $paymentService = new PaymentService($paymentGateway);
         $result = $paymentService->processPayment(100.00, 'USD');
-
+        
         $this->assertTrue($result);
     }
 }

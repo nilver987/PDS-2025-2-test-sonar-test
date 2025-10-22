@@ -96,7 +96,7 @@ class TipoTramiteController extends Controller
 
             DB::commit();
 
-            if (request()->wantsJson()) {
+            if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => 'Tipo de trámite creado exitosamente',
@@ -110,7 +110,7 @@ class TipoTramiteController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             
-            if (request()->wantsJson()) {
+            if ($request->wantsJson()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Error al crear el tipo de trámite: ' . $e->getMessage()

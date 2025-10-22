@@ -23,7 +23,7 @@ class EmailServiceTest extends TestCase
 
         $emailService = new EmailService($mailer);
         $result = $emailService->sendEmail('test@example.com', 'Test Subject', 'Test Content');
-
+        
         $this->assertTrue($result);
     }
 }

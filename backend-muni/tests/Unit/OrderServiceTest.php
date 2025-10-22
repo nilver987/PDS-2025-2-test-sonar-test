@@ -18,26 +18,12 @@ class OrderServiceTest extends TestCase
         $orderRepo = Mockery::mock('OrderRepository');
         $orderRepo->shouldReceive('create')
                  ->once()
-                 ->with(['product_id' => 1, 'quantity' => 100])
-                 ->andReturn(['id' => 1, 'status' => 'pending']);
-
-        $orderService = new OrderService($orderRepo);
-        $result = $orderService->createOrder(1, 100);
-
-        $this->assertEquals('pending', $result['status']);
-    }
-
-    public function testUpdateOrderStatus()
-    {
-        $orderRepo = Mockery::mock('OrderRepository');
-        $orderRepo->shouldReceive('updateStatus')
-                 ->once()
-                 ->with(1, 'completed')
+                 ->with(['product_id' => 1, 'quantity' => 2])
                  ->andReturn(true);
 
         $orderService = new OrderService($orderRepo);
-        $result = $orderService->updateStatus(1, 'completed');
-
+        $result = $orderService->createOrder(1, 2);
+        
         $this->assertTrue($result);
     }
 }

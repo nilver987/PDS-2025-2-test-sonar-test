@@ -18,9 +18,4 @@ class OrderService
             'quantity' => $quantity
         ]);
     }
-
-    public function updateStatus($orderId, $status)
-    {
-        return $this->orderRepo->updateStatus($orderId, $status);
-    }
 }
